@@ -32,17 +32,17 @@ C.media = {
 	["arrowDown"] = "Interface\\AddOns\\Aurora\\media\\arrow-down-active",
 	["arrowLeft"] = "Interface\\AddOns\\Aurora\\media\\arrow-left-active",
 	["arrowRight"] = "Interface\\AddOns\\Aurora\\media\\arrow-right-active",
-	["backdrop"] = "Interface\\ChatFrame\\ChatFrameBackground",
+	["backdrop"] = "Interface\\BUTTONS\\WHITE8X8",
 	["checked"] = "Interface\\AddOns\\Aurora\\media\\CheckButtonHilight",
-	["font"] = "Interface\\AddOns\\Aurora\\media\\font.ttf",
+	["font"] = ChatFontNormal:GetFont(),
 	["glow"] = "Interface\\AddOns\\Aurora\\media\\glow",
 }
 
 C.defaults = {
-	["alpha"] = 0.5,
+	["alpha"] = 0.95,
 	["bags"] = true,
-	["chatBubbles"] = true,
-	["enableFont"] = true,
+	["chatBubbles"] = false,
+	["enableFont"] = false,
 	["loot"] = true,
 	["useCustomColour"] = false,
 	["customColour"] = {r = 1, g = 1, b = 1},
@@ -69,8 +69,8 @@ F.CreateBD = function(f, a)
 		edgeFile = C.media.backdrop,
 		edgeSize = 1,
 	})
-	f:SetBackdropColor(0, 0, 0, a or alpha)
-	f:SetBackdropBorderColor(0, 0, 0)
+	f:SetBackdropColor(.05, .05, .05, a or alpha)
+	f:SetBackdropBorderColor(0, 0, 0, 1)
 	if not a then tinsert(C.frames, f) end
 end
 
@@ -82,21 +82,21 @@ F.CreateBG = function(frame)
 	bg:SetPoint("TOPLEFT", frame, -1, 1)
 	bg:SetPoint("BOTTOMRIGHT", frame, 1, -1)
 	bg:SetTexture(C.media.backdrop)
-	bg:SetVertexColor(0, 0, 0)
+	bg:SetVertexColor(0, 0, 0, 1)
 
 	return bg
 end
 
 F.CreateSD = function(parent, size, r, g, b, alpha, offset)
 	local sd = CreateFrame("Frame", nil, parent)
-	sd.size = size or 5
+	sd.size = size or 4
 	sd.offset = offset or 0
 	sd:SetBackdrop({
 		edgeFile = C.media.glow,
 		edgeSize = sd.size,
 	})
-	sd:SetPoint("TOPLEFT", parent, -sd.size - 1 - sd.offset, sd.size + 1 + sd.offset)
-	sd:SetPoint("BOTTOMRIGHT", parent, sd.size + 1 + sd.offset, -sd.size - 1 - sd.offset)
+	sd:SetPoint("TOPLEFT", parent, -sd.size + 1 - sd.offset, sd.size - 1 + sd.offset)
+	sd:SetPoint("BOTTOMRIGHT", parent, sd.size - 1 + sd.offset, -sd.size + 1 - sd.offset)
 	sd:SetBackdropBorderColor(r or 0, g or 0, b or 0)
 	sd:SetAlpha(alpha or 1)
 end
@@ -181,14 +181,14 @@ F.CreateTab = function(f)
 	f:DisableDrawLayer("BACKGROUND")
 
 	local bg = CreateFrame("Frame", nil, f)
-	bg:SetPoint("TOPLEFT", 8, -3)
+	bg:SetPoint("TOPLEFT", 8, -1)
 	bg:SetPoint("BOTTOMRIGHT", -8, 0)
 	bg:SetFrameLevel(f:GetFrameLevel()-1)
 	F.CreateBD(bg)
 
 	f:SetHighlightTexture(C.media.backdrop)
 	local hl = f:GetHighlightTexture()
-	hl:SetPoint("TOPLEFT", 9, -4)
+	hl:SetPoint("TOPLEFT", 9, -2)
 	hl:SetPoint("BOTTOMRIGHT", -9, 1)
 	hl:SetVertexColor(r, g, b, .25)
 end
@@ -1193,6 +1193,8 @@ Skin:SetScript("OnEvent", function(self, event, addon)
 
 		ReputationFrame:HookScript("OnShow", UpdateFactionSkins)
 		ReputationFrame:HookScript("OnEvent", UpdateFactionSkins)
+		ReputationFrameTopTreeTexture:SetTexture(nil)
+		ReputationFrameTopTreeTexture2:SetTexture(nil)
 
 		for i = 1, NUM_FACTIONS_DISPLAYED do
 			local bu = _G["ReputationBar"..i.."ExpandOrCollapseButton"]
@@ -6387,6 +6389,10 @@ Skin:SetScript("OnEvent", function(self, event, addon)
 			bg:SetAllPoints()
 			bg:SetFrameLevel(0)
 			F.CreateBD(bg)
+			f.Delimiter1:SetHeight(1)
+			f.Delimiter1:SetVertexColor(0, 0, 0, 1)
+			f.Delimiter2:SetHeight(1)
+			f.Delimiter2:SetVertexColor(0, 0, 0, 1)
 		end
 
 		PetJournalLoadoutBorderSlotHeaderText:SetParent(PetJournal)
@@ -6455,6 +6461,9 @@ Skin:SetScript("OnEvent", function(self, event, addon)
 			bu.icon.bg:SetPoint("BOTTOMRIGHT", bu.icon, 1, -1)
 			bu.icon.bg:SetFrameLevel(bu:GetFrameLevel()-1)
 			F.CreateBD(bu.icon.bg, .25)
+			
+			bu.petTypeIcon:ClearAllPoints()
+			bu.petTypeIcon:SetPoint("BOTTOMLEFT", 1, 1)
 
 			bu.setButton:GetRegions():SetPoint("TOPLEFT", bu.icon, -5, 5)
 			bu.setButton:GetRegions():SetPoint("BOTTOMRIGHT", bu.icon, 5, -5)
@@ -6522,33 +6531,240 @@ Skin:SetScript("OnEvent", function(self, event, addon)
 			F.CreateBG(bu.icon)
 		end
 
-		local function ColourPetQuality()
-			local petButtons = PetJournal.listScroll.buttons
-			if petButtons then
-				for i = 1, #petButtons do
-					local index = petButtons[i].index
-					if index then
-						local petID = C_PetJournal.GetPetInfoByIndex(index)
-
-						if petID then
-							local health, maxHealth, attack, speed, rarity = C_PetJournal.GetPetStats(petID)
-							local text = petButtons[i].name
-
-							if rarity then
-								local color = ITEM_QUALITY_COLORS[rarity-1]
-								text:SetTextColor(color.r, color.g, color.b)
+		-- coloring for pet names, credits to PetJournalEnhanced
+		local function Hooked_PetJournal_UpdatePetList()
+			local scrollFrame = PetJournal.listScroll
+			local offset = HybridScrollFrame_GetOffset(scrollFrame)
+			local petButtons = scrollFrame.buttons
+			local pet, index
+			
+			local isWild = PetJournal.isWild
+			
+			local numPets, _ = C_PetJournal.GetNumPets(isWild)
+			
+			for i = 1,#petButtons do
+				pet = petButtons[i]
+				index = offset + i
+				if index <= numPets then
+					local petID, _, isOwned, customName, _, _, _, name, _, _, _, _, _, _, canBattle = C_PetJournal.GetPetInfoByIndex(index, isWild)
+					if isOwned then
+						local rarity = select(5, C_PetJournal.GetPetStats(petID))
+						if canBattle and rarity then
+							local hex = select(4, GetItemQualityColor(rarity-1))
+							if customName then
+								pet.subName:SetText("|c"..hex..name.."|r")
 							else
-								text:SetTextColor(1, 1, 1)
+								pet.name:SetText("|c"..hex..name.."|r")
 							end
 						end
 					end
 				end
 			end
 		end
+		
+		local function Hooked_PetJournal_UpdatePetCard()
+			if PetJournalPetCard.petID then
+				local _, customName, _, _, _, _, name, _, _, _, _, _, _, canBattle, _ = C_PetJournal.GetPetInfoByPetID(PetJournalPetCard.petID)
+				if canBattle then
+					local rarity = select(5, C_PetJournal.GetPetStats(PetJournalPetCard.petID))
+					PetJournalPetCard.QualityFrame.quality:SetText(_G["BATTLE_PET_BREED_QUALITY"..rarity])
+					local r, g, b, hex = GetItemQualityColor(rarity-1)
 
-		hooksecurefunc("PetJournal_UpdatePetList", ColourPetQuality)
-		PetJournalListScrollFrame:HookScript("OnVerticalScroll", ColourPetQuality)
-		PetJournalListScrollFrame:HookScript("OnMouseWheel", ColourPetQuality)
+					if canBattle then
+						if customName then
+							PetJournalPetCard.PetInfo.subName:SetText("|c"..hex..name.."|r")
+						else
+							PetJournalPetCard.PetInfo.name:SetText("|c"..hex..name.."|r")
+						end
+					end
+
+					--display rarity indicator which is hidden by blizzard for some reason for non wild pets.
+					PetJournalPetCard.QualityFrame.quality:SetVertexColor(r, g, b)
+					PetJournalPetCard.QualityFrame:Show()
+				else
+					PetJournalPetCard.QualityFrame:Hide()
+				end
+			end
+		end
+
+		local function Hooked_PetJournal_UpdatePetLoadOut()
+			for i=1, 3 do
+				local Pet = PetJournal.Loadout["Pet"..i]
+				local petID, _, _, _, locked =  C_PetJournal.GetPetLoadOutInfo(i)
+				if not locked and petID > 0 then
+					local _, customName, _, _, _, _, name = C_PetJournal.GetPetInfoByPetID(petID)
+					local rarity = select(5, C_PetJournal.GetPetStats(petID))
+					local hex = select(4, GetItemQualityColor(rarity-1))
+					if customName then
+						Pet.subName:SetText("|c"..hex..name.."|r")
+					else
+						Pet.name:SetText("|c"..hex..name.."|r")
+					end
+				end
+			end
+		end
+		
+		hooksecurefunc("PetJournal_UpdatePetList", Hooked_PetJournal_UpdatePetList)
+		hooksecurefunc("PetJournal_UpdatePetCard", Hooked_PetJournal_UpdatePetCard)
+		hooksecurefunc("PetJournal_UpdatePetLoadOut", Hooked_PetJournal_UpdatePetLoadOut)
+		
+		-- Skinning for PetBattleUI
+		PetBattleFrame.TopArtLeft:SetAlpha(0)
+		PetBattleFrame.TopArtRight:SetAlpha(0)
+		PetBattleFrame.TopVersus:SetAlpha(0)
+		PetBattleFrame.WeatherFrame:DisableDrawLayer("BACKGROUND")
+		
+		local framelist = {PetBattleFrame.ActiveAlly, PetBattleFrame.ActiveEnemy}
+		local minilist = {PetBattleFrame.Ally2, PetBattleFrame.Ally3, PetBattleFrame.Enemy2, PetBattleFrame.Enemy3}
+		
+		for i, f in pairs(framelist) do
+			f.Icon:SetTexCoord(.08, .92, .08, .92)
+			f.Border:SetAlpha(0)
+			f.HealthBarBG:SetAlpha(0)
+			f.Border2:SetAlpha(0)
+			f.BorderFlash:SetTexture("")
+			f.LevelUnderlay:SetAlpha(0)
+			f.SpeedUnderlay:SetAlpha(0)
+			f.ActualHealthBar:SetTexture("Interface\\TARGETINGFRAME\\UI-TargetingFrame-BarFill")
+			f.ActualHealthBar:SetTexCoord(0, 1, 0, 1)
+			f.ActualHealthBar:SetVertexColor(0, .9, 0, 1)
+			f.HealthBarFrame:SetAlpha(0)
+			
+			local IconBorder = CreateFrame("Frame", nil, f)
+			IconBorder:SetFrameStrata("BACKGROUND")
+			IconBorder:SetPoint("TOPLEFT", f.Icon, -1, 1)
+			IconBorder:SetPoint("BOTTOMRIGHT", f.Icon, 1, -1)
+			F.SetBD(IconBorder)
+			
+			local HealthBorder = CreateFrame("Frame", nil, f)
+			HealthBorder:SetFrameStrata("BACKGROUND")
+			HealthBorder:SetSize(147, 39)
+			F.SetBD(HealthBorder)
+			if i == 1 then
+				HealthBorder:SetPoint("TOPLEFT", f.ActualHealthBar, -1, 1)
+			else
+				HealthBorder:SetPoint("BOTTOMRIGHT", f.ActualHealthBar, 1, -1)
+			end
+		end
+		
+		for i, f in pairs(minilist) do
+			f:SetSize(37, 37)
+			f.healthBarWidth = 35
+			f.Icon:SetTexCoord(.08, .92, .08, .92)
+			f.HealthBarBG:SetAlpha(0)
+			f.ActualHealthBar:SetTexture("Interface\\TARGETINGFRAME\\UI-TargetingFrame-BarFill")
+			f.ActualHealthBar:ClearAllPoints()
+			if i == 1 or i == 2 then
+				f.ActualHealthBar:SetPoint("BOTTOMLEFT", 1, 1)
+			else
+				f.ActualHealthBar:SetPoint("BOTTOMRIGHT", -1, 1)
+			end
+			f.BorderAlive:SetAlpha(0)
+			f.HealthDivider:SetAlpha(0)
+			
+			f.IconBorder = CreateFrame("Frame", nil, f)
+			f.IconBorder:SetFrameStrata("BACKGROUND")
+			f.IconBorder:SetPoint("TOPLEFT", f.Icon)
+			f.IconBorder:SetPoint("BOTTOMRIGHT", f.Icon)
+			F.SetBD(f.IconBorder)
+		end
+		
+		PetBattleFrameXPBarLeft:SetTexture("")
+		PetBattleFrameXPBarRight:SetTexture("")
+		PetBattleFrameXPBarMiddle:SetTexture("")
+		PetBattleFrameXPBar:DisableDrawLayer("BACKGROUND")
+		PetBattleFrameXPBar:SetSize(250, 11)
+		PetBattleFrameXPBar:ClearAllPoints()
+		PetBattleFrameXPBar:SetPoint("BOTTOM", UIParent, 14, 120)
+		
+		local bottom = PetBattleFrame.BottomFrame
+		bottom:ClearAllPoints()
+		bottom:SetPoint("BOTTOM", UIParent, 100, 0)
+		bottom.RightEndCap:SetAlpha(0)
+		bottom.LeftEndCap:SetAlpha(0)
+		bottom.Background:SetAlpha(0)
+		bottom.Delimiter:SetAlpha(0)
+		bottom.MicroButtonFrame:Hide()
+		
+		F.Reskin(bottom.TurnTimer.SkipButton)
+		bottom.TurnTimer.TimerBG:SetAlpha(0)
+		bottom.TurnTimer.ArtFrame:SetAlpha(0)
+		bottom.TurnTimer.ArtFrame2:SetAlpha(0)
+		bottom.TurnTimer.Bar:ClearAllPoints()
+		bottom.TurnTimer.Bar:SetPoint("LEFT", bottom.TurnTimer, 115, -3)
+		
+		bottom.FlowFrame:DisableDrawLayer("BACKGROUND")
+		bottom.FlowFrame.LeftEndCap:SetAlpha(0)
+		bottom.FlowFrame.RightEndCap:SetAlpha(0)
+		
+		local list = {bottom.PetSelectionFrame.Pet1, bottom.PetSelectionFrame.Pet2, bottom.PetSelectionFrame.Pet3}
+		for _, f in pairs(list) do
+			f.Framing:SetAlpha(0)
+			f.Icon:SetTexCoord(.08, .92, .08, .92)
+			f.HealthBarBG:SetAlpha(0)
+			f.ActualHealthBar:SetTexture("Interface\\TARGETINGFRAME\\UI-TargetingFrame-BarFill")
+			f.HealthDivider:SetAlpha(0)
+			f.DeadOverlay:SetAlpha(0)
+		end
+		
+		local xpBorder = CreateFrame("Frame", nil, PetBattleFrameXPBar)
+		xpBorder:SetPoint("TOPLEFT", -1, 1)
+		xpBorder:SetPoint("BOTTOMRIGHT", 1, -1)
+		F.SetBD(xpBorder)
+		
+		local timerBorder = CreateFrame("Frame", nil, bottom.TurnTimer)
+		timerBorder:SetPoint("TOPLEFT", bottom.TurnTimer.Bar, -1, 1)
+		timerBorder:SetSize(163, 13)
+		F.SetBD(timerBorder)
+		bottom.TurnTimer.timerBorder = timerBorder
+		hooksecurefunc("PetBattleFrame_UpdatePassButtonAndTimer", function(self)
+			local pveBattle = C_PetBattles.IsPlayerNPC(LE_BATTLE_PET_ENEMY)
+			self.BottomFrame.TurnTimer.timerBorder:SetShown(not pveBattle)
+		end)
+		hooksecurefunc("PetBattleFrameTurnTimer_OnUpdate", function(self, elapsed)
+			if ( self.turnExpires ) then
+				local timeRemaining = self.turnExpires - GetTime()
+				if ( timeRemaining <= 0.01 ) then
+					timeRemaining = 0.01
+				end
+
+				local timeRatio = 1.0;
+				if ( self.turnTime > 0.0 ) then
+					timeRatio = timeRemaining / self.turnTime
+				end
+				local usableSpace = 161
+
+				self.Bar:SetWidth(timeRatio * usableSpace);
+			end
+		end)
+		
+		-- rarity glow for pets in battle, credits to HPetBattleAny
+		local function Hooked_PetBattleUnitFrame_UpdateDisplay(self)
+			if self.petOwner and self.petIndex and self.petIndex <= C_PetBattles.GetNumPets(self.petOwner) then
+				local rarity = C_PetBattles.GetBreedQuality(self.petOwner,self.petIndex)
+				local r, g, b = GetItemQualityColor(rarity-1)
+				if (ENABLE_COLORBLIND_MODE == "1") then
+					self.Name:SetText(self.Name:GetText().." (".._G["BATTLE_PET_BREED_QUALITY"..rarity]..")")
+				end
+
+				if self.Name then
+					self.Name:SetVertexColor(r, g, b)
+				end
+
+				if self.Icon then
+					if not self.glow then
+						self.glow = self:CreateTexture(nil, 'ARTWORK', nil, 2)
+						self.glow:SetTexture('Interface\\Buttons\\CheckButtonHilight')
+						self.glow:SetSize(self.Icon:GetWidth(), self.Icon:GetHeight())
+						self.glow:SetPoint('CENTER', self.Icon)
+						self.glow:SetBlendMode('ADD')
+						self.glow:SetAlpha(1)
+					end
+					self.glow:SetVertexColor(r, g, b)
+				end
+			end
+		end
+		hooksecurefunc("PetBattleUnitFrame_UpdateDisplay", Hooked_PetBattleUnitFrame_UpdateDisplay)
 	elseif addon == "Blizzard_ReforgingUI" then
 		for i = 15, 25 do
 			select(i, ReforgingFrame:GetRegions()):Hide()
@@ -7334,101 +7550,317 @@ Delay:SetScript("OnEvent", function()
 
 		F.CreateBD(FriendsTooltip)
 
-		-- pet battle stuff
-
-		local tooltips = {PetBattlePrimaryAbilityTooltip, PetBattlePrimaryUnitTooltip, FloatingBattlePetTooltip, BattlePetTooltip, FloatingPetBattleAbilityTooltip}
+		-- [[ Pet battle tooltips ]]
+		
+		local tooltips = {PetJournalPrimaryAbilityTooltip, PetJournalSecondaryAbilityTooltip, PetBattlePrimaryUnitTooltip, PetBattlePrimaryAbilityTooltip, FloatingBattlePetTooltip, FloatingPetBattleAbilityTooltip, BattlePetTooltip}
 		for _, f in pairs(tooltips) do
-			f:DisableDrawLayer("BACKGROUND")
-			local bg = CreateFrame("Frame", nil, f)
-			bg:SetAllPoints()
-			bg:SetFrameLevel(0)
-			F.CreateBD(bg)
+			if f then
+				f:DisableDrawLayer("BACKGROUND")
+				f:DisableDrawLayer("BORDER")
+				local bg = CreateFrame("Frame", nil, f)
+				bg:SetAllPoints()
+				bg:SetFrameLevel(0)
+				F.CreateBD(bg)
+			end
+			if f.Delimiter then
+				f.Delimiter:SetHeight(1)
+				f.Delimiter:SetVertexColor(0, 0, 0, 1)
+			end
+			if f.Delimiter1 then
+				f.Delimiter1:SetHeight(1)
+				f.Delimiter1:SetVertexColor(0, 0, 0, 1)
+			end
+			if f.Delimiter2 then
+				f.Delimiter2:SetHeight(1)
+				f.Delimiter2:SetVertexColor(0, 0, 0, 1)
+			end
+			if f.CloseButton then
+				F.ReskinClose(f.CloseButton)
+			end
 		end
-
-		PetBattlePrimaryUnitTooltip.Delimiter:SetTexture(0, 0, 0)
-		PetBattlePrimaryUnitTooltip.Delimiter:SetHeight(1)
-		PetBattlePrimaryAbilityTooltip.Delimiter1:SetHeight(1)
-		PetBattlePrimaryAbilityTooltip.Delimiter1:SetTexture(0, 0, 0)
-		PetBattlePrimaryAbilityTooltip.Delimiter2:SetHeight(1)
-		PetBattlePrimaryAbilityTooltip.Delimiter2:SetTexture(0, 0, 0)
-		FloatingPetBattleAbilityTooltip.Delimiter1:SetHeight(1)
-		FloatingPetBattleAbilityTooltip.Delimiter1:SetTexture(0, 0, 0)
-		FloatingPetBattleAbilityTooltip.Delimiter2:SetHeight(1)
-		FloatingPetBattleAbilityTooltip.Delimiter2:SetTexture(0, 0, 0)
-		FloatingBattlePetTooltip.Delimiter:SetTexture(0, 0, 0)
-		FloatingBattlePetTooltip.Delimiter:SetHeight(1)
-		F.ReskinClose(FloatingBattlePetTooltip.CloseButton)
-		F.ReskinClose(FloatingPetBattleAbilityTooltip.CloseButton)
 	end
 
 	if AuroraConfig.map == true and not(IsAddOnLoaded("MetaMap") or IsAddOnLoaded("m_Map") or IsAddOnLoaded("Mapster")) then
-		WorldMapFrameMiniBorderLeft:SetAlpha(0)
-		WorldMapFrameMiniBorderRight:SetAlpha(0)
+		local function Kill(object)
+			object.Show = F.dummy
+			object:Hide()
+		end
+		
+		local function KillTex(object, kill)
+			for i=1, object:GetNumRegions() do
+				local region = select(i, object:GetRegions())
+				if region:GetObjectType() == "Texture" then
+					if kill then
+						Kill(region)
+					else
+						region:SetTexture(nil)
+					end
+				end
+			end		
+		end
+		
+		local function CreateBackdrop(f)
+			if f.backdrop then return end
+			
+			local b = CreateFrame("Frame", nil, f)
+			b:SetPoint("TOPLEFT", -2, 2)
+			b:SetPoint("BOTTOMRIGHT", 2, -2)
+			F.CreateBD(b)
 
-		local scale = WORLDMAP_WINDOWED_SIZE
-		local mapbg = CreateFrame("Frame", nil, WorldMapDetailFrame)
-		mapbg:SetPoint("TOPLEFT", -1 / scale, 1 / scale)
-		mapbg:SetPoint("BOTTOMRIGHT", 1 / scale, -1 / scale)
-		mapbg:SetFrameLevel(0)
-		mapbg:SetBackdrop({
-			bgFile = C.media.backdrop,
-		})
-		mapbg:SetBackdropColor(0, 0, 0)
-
-		local frame = CreateFrame("Frame",nil,WorldMapButton)
-		frame:SetFrameStrata("HIGH")
-
-		local function skinmap()
-			WorldMapFrameMiniBorderLeft:SetAlpha(0)
-			WorldMapFrameMiniBorderRight:SetAlpha(0)
-			WorldMapFrameCloseButton:ClearAllPoints()
-			WorldMapFrameCloseButton:SetPoint("TOPRIGHT", WorldMapButton, "TOPRIGHT", 3, 3)
-			WorldMapFrameCloseButton:SetFrameStrata("HIGH")
-			WorldMapFrameSizeUpButton:ClearAllPoints()
-			WorldMapFrameSizeUpButton:SetPoint("TOPRIGHT", WorldMapButton, "TOPRIGHT", 3, -18)
-			WorldMapFrameSizeUpButton:SetFrameStrata("HIGH")
-			WorldMapFrameTitle:ClearAllPoints()
-			WorldMapFrameTitle:SetPoint("BOTTOMLEFT", WorldMapDetailFrame, 9, 5)
-			WorldMapFrameTitle:SetParent(frame)
-			WorldMapFrameTitle:SetTextColor(1, 1, 1)
-			WorldMapQuestShowObjectives:SetPoint("BOTTOMRIGHT", WorldMapButton, "BOTTOMRIGHT")
-			WorldMapQuestShowObjectives.SetPoint = F.dummy
-			WorldMapQuestShowObjectives:SetFrameStrata("HIGH")
-			WorldMapQuestShowObjectivesText:ClearAllPoints()
-			WorldMapQuestShowObjectivesText:SetPoint("RIGHT", WorldMapQuestShowObjectives, "LEFT", -4, 1)
-			WorldMapQuestShowObjectivesText:SetTextColor(1, 1, 1)
-			WorldMapTrackQuest:SetParent(frame)
-			WorldMapTrackQuest:ClearAllPoints()
-			WorldMapTrackQuest:SetPoint("TOPLEFT", WorldMapDetailFrame, 9, -5)
-			WorldMapTrackQuestText:SetTextColor(1, 1, 1)
-			WorldMapShowDigSites:SetFrameStrata("HIGH")
-			WorldMapShowDigSites:ClearAllPoints()
-			WorldMapShowDigSites:SetPoint("BOTTOMRIGHT", WorldMapButton, "BOTTOMRIGHT", 0, 19)
-			WorldMapShowDigSitesText:ClearAllPoints()
-			WorldMapShowDigSitesText:SetPoint("RIGHT", WorldMapShowDigSites, "LEFT", -4, 1)
-			WorldMapShowDigSitesText:SetTextColor(1, 1, 1)
-			if AuroraConfig.enableFont then
-				WorldMapFrameTitle:SetFont(C.media.font, 12 / scale, "THINOUTLINE")
-				WorldMapFrameTitle:SetShadowOffset(0, 0)
-				WorldMapQuestShowObjectivesText:SetFont(C.media.font, 12, "OUTLINE")
-				WorldMapQuestShowObjectivesText:SetShadowOffset(0, 0)
-				WorldMapTrackQuestText:SetFont(C.media.font, 12 / scale, "OUTLINE")
-				WorldMapTrackQuestText:SetShadowOffset(0, 0)
-				WorldMapShowDigSitesText:SetFont(C.media.font, 12, "OUTLINE")
-				WorldMapShowDigSitesText:SetShadowOffset(0, 0)
+			if f:GetFrameLevel() - 1 >= 0 then
+				b:SetFrameLevel(f:GetFrameLevel() - 1)
+			else
+				b:SetFrameLevel(0)
+			end
+			
+			f.backdrop = b
+		end
+		
+		do
+			SetFontString = function(parent, fontName, fontHeight, fontStyle)
+				local fs = parent:CreateFontString(nil, "OVERLAY")
+				fs:SetFont(fontName, fontHeight, fontStyle)
+				fs:SetJustifyH("LEFT")
+				fs:SetShadowColor(0, 0, 0)
+				fs:SetShadowOffset(1.25, -1.25)
+				return fs
 			end
 		end
+		
+		F.ReskinClose1 = function(f, t)
+			f:SetSize(17, 17)
+			f:SetNormalTexture("")
+			f:SetHighlightTexture("")
+			f:SetPushedTexture("")
+			f:SetDisabledTexture("")
+			F.CreateBD(f, 0)
+			
+			local tex = f:CreateTexture(nil, "BACKGROUND")
+			tex:SetPoint("TOPLEFT")
+			tex:SetPoint("BOTTOMRIGHT")
+			tex:SetTexture(C.media.backdrop)
+			tex:SetGradientAlpha("VERTICAL", 0, 0, 0, .3, .35, .35, .35, .35)
 
-		skinmap()
-		hooksecurefunc("WorldMap_ToggleSizeDown", skinmap)
+			local text = f:CreateFontString(nil, "OVERLAY")
+			text:SetFont(C.media.font, 12, "THINOUTLINE")
+			text:SetPoint("CENTER", 1, 0)
+			text:SetText(t)
+
+			f:HookScript("OnEnter", function(self) text:SetTextColor(1, .1, .1) end)
+			f:HookScript("OnLeave", function(self) text:SetTextColor(1, 1, 1) end)
+		end
+
+		--World Map
+		CreateBackdrop(WorldMapFrame)
+		F.CreateSD(WorldMapFrame.backdrop)
+		WorldMapDetailFrame.backdrop = CreateFrame("Frame", nil, WorldMapFrame)
+		F.CreateBD(WorldMapDetailFrame.backdrop, 0)
+		WorldMapDetailFrame.backdrop:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT")
+		WorldMapDetailFrame.backdrop:SetPoint("BOTTOMRIGHT", WorldMapDetailFrame, "BOTTOMRIGHT")
+		WorldMapDetailFrame.backdrop:SetFrameLevel(WorldMapDetailFrame:GetFrameLevel() + 1)
+
+		F.ReskinClose(WorldMapFrameCloseButton)
+		F.ReskinClose1(WorldMapFrameSizeDownButton,"S")
+		F.ReskinClose1(WorldMapFrameSizeUpButton,"L")
 
 		F.ReskinDropDown(WorldMapLevelDropDown)
-		F.ReskinCheck(WorldMapShowDigSites)
-		F.ReskinCheck(WorldMapQuestShowObjectives)
+		F.ReskinDropDown(WorldMapZoneMinimapDropDown)
+		F.ReskinDropDown(WorldMapContinentDropDown)
+		F.ReskinDropDown(WorldMapZoneDropDown)
+		
+		F.ReskinScroll(WorldMapQuestDetailScrollFrameScrollBar)
+		F.ReskinScroll(WorldMapQuestScrollFrameScrollBar)
+
+		F.Reskin(WorldMapZoomOutButton)
+		WorldMapZoomOutButton:SetPoint("LEFT", WorldMapZoneDropDown, "RIGHT", 0, 4)
+		WorldMapLevelUpButton:SetPoint("TOPLEFT", WorldMapLevelDropDown, "TOPRIGHT", -2, 8)
+		WorldMapLevelDownButton:SetPoint("BOTTOMLEFT", WorldMapLevelDropDown, "BOTTOMRIGHT", -2, 2)
+
 		F.ReskinCheck(WorldMapTrackQuest)
+		F.ReskinCheck(WorldMapQuestShowObjectives)
+		F.ReskinCheck(WorldMapShowDigSites)
+
+		--Mini
+		local function SmallSkin()
+			if not InCombatLockdown() then
+				WorldMapLevelDropDown:ClearAllPoints()
+				WorldMapLevelDropDown:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", -17, 27)
+			end
+			
+			WorldMapFrame.backdrop:ClearAllPoints()
+			WorldMapFrame.backdrop:SetPoint("TOPLEFT", 2, 2)
+			WorldMapFrame.backdrop:SetPoint("BOTTOMRIGHT", 2, -2)
+			
+			WorldMapFrameCloseButton:ClearAllPoints()
+			WorldMapFrameCloseButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -3, -3)
+			WorldMapFrameCloseButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+			
+			WorldMapFrameSizeUpButton:ClearAllPoints()
+			WorldMapFrameSizeUpButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -22, -3)
+			WorldMapFrameSizeUpButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+		end
+
+		--Large
+		local function LargeSkin()
+			if not InCombatLockdown() then
+				WorldMapFrame:SetParent(UIParent)
+				WorldMapFrame:EnableMouse(false)
+				WorldMapFrame:EnableKeyboard(false)
+				SetUIPanelAttribute(WorldMapFrame, "area", "center");
+				SetUIPanelAttribute(WorldMapFrame, "allowOtherPanels", true)
+			end
+			
+			WorldMapFrame.backdrop:ClearAllPoints()
+			WorldMapFrame.backdrop:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", -25, 70)
+			WorldMapFrame.backdrop:SetPoint("BOTTOMRIGHT", WorldMapDetailFrame, "BOTTOMRIGHT", 25, -30)
+
+			WorldMapFrameCloseButton:ClearAllPoints()
+			WorldMapFrameCloseButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -3, -3)
+			WorldMapFrameCloseButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+			
+			WorldMapFrameSizeDownButton:ClearAllPoints()
+			WorldMapFrameSizeDownButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -22, -3)
+			WorldMapFrameSizeDownButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+		end
+		
+		--Quest
+		local function QuestSkin()
+			if not InCombatLockdown() then
+				WorldMapFrame:SetParent(UIParent)
+				WorldMapFrame:EnableMouse(false)
+				WorldMapFrame:EnableKeyboard(false)
+				SetUIPanelAttribute(WorldMapFrame, "area", "center");
+				SetUIPanelAttribute(WorldMapFrame, "allowOtherPanels", true)
+			end
+			
+			WorldMapFrame.backdrop:ClearAllPoints()
+			WorldMapFrame.backdrop:SetPoint("TOPLEFT", WorldMapDetailFrame, "TOPLEFT", -25, 70)
+			WorldMapFrame.backdrop:SetPoint("BOTTOMRIGHT", WorldMapDetailFrame, "BOTTOMRIGHT", 325, -235)  
+			
+			WorldMapFrameCloseButton:ClearAllPoints()
+			WorldMapFrameCloseButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -3, -3)
+			WorldMapFrameCloseButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+			
+			WorldMapFrameSizeDownButton:ClearAllPoints()
+			WorldMapFrameSizeDownButton:SetPoint("TOPRIGHT", WorldMapFrame.backdrop, "TOPRIGHT", -22, -3)
+			WorldMapFrameSizeDownButton:SetFrameLevel(WorldMapFrame.backdrop:GetFrameLevel()+1)
+			
+			if not WorldMapQuestDetailScrollFrame.backdrop then
+				CreateBackdrop(WorldMapQuestDetailScrollFrame)
+				WorldMapQuestDetailScrollFrame.backdrop:SetPoint("TOPLEFT", -22, 2)
+				WorldMapQuestDetailScrollFrame.backdrop:SetPoint("BOTTOMRIGHT", 23, -4)
+			end
+			
+			if not WorldMapQuestRewardScrollFrame.backdrop then
+				CreateBackdrop(WorldMapQuestRewardScrollFrame)
+				WorldMapQuestRewardScrollFrame.backdrop:SetPoint("BOTTOMRIGHT", 22, -4)				
+			end
+			
+			if not WorldMapQuestScrollFrame.backdrop then
+				CreateBackdrop(WorldMapQuestScrollFrame)
+				WorldMapQuestScrollFrame.backdrop:SetPoint("TOPLEFT", 0, 2)
+				WorldMapQuestScrollFrame.backdrop:SetPoint("BOTTOMRIGHT", 24, -3)				
+			end
+		end			
+
+		local function FixSkin()
+			KillTex(WorldMapFrame)
+			if WORLDMAP_SETTINGS.size == WORLDMAP_FULLMAP_SIZE then
+				LargeSkin()
+			elseif WORLDMAP_SETTINGS.size == WORLDMAP_WINDOWED_SIZE then
+				SmallSkin()
+			elseif WORLDMAP_SETTINGS.size == WORLDMAP_QUESTLIST_SIZE then
+				QuestSkin()
+			end
+			
+			if not InCombatLockdown() then
+				WorldMapFrame:SetScale(1)
+				WorldMapFrameSizeDownButton:Show()
+				WorldMapFrame:SetFrameLevel(10)
+			else
+				WorldMapFrameSizeDownButton:Disable()
+				WorldMapFrameSizeUpButton:Disable()
+			end		
+		end
+
+		WorldMapFrame:HookScript("OnShow", FixSkin)
+		hooksecurefunc("WorldMapFrame_SetFullMapView", LargeSkin)
+		hooksecurefunc("WorldMapFrame_SetQuestMapView", QuestSkin)
+		hooksecurefunc("WorldMap_ToggleSizeUp", FixSkin)
+
+		WorldMapFrame:HookScript("OnEvent", function(self, event)
+			if event == "PLAYER_ENTERING_WORLD" then
+				SetCVar("miniWorldMap", 1)
+				WorldMap_ToggleSizeDown()
+			end
+		end)
+
+		local coords = CreateFrame("Frame", "CoordsFrame", WorldMapFrame)
+		coords:SetFrameLevel(90)
+		coords.PlayerText = SetFontString(CoordsFrame, C.media.font, 12, "THINOUTLINE")
+		coords.MouseText = SetFontString(CoordsFrame, C.media.font, 12, "THINOUTLINE")
+		coords.PlayerText:SetTextColor(WorldMapQuestShowObjectivesText:GetTextColor())
+		coords.MouseText:SetTextColor(WorldMapQuestShowObjectivesText:GetTextColor())
+		coords.PlayerText:SetPoint("TOPLEFT", WorldMapButton, "TOPLEFT", 5, -5)
+		coords.PlayerText:SetText("Player:   0, 0")
+		coords.MouseText:SetPoint("TOPLEFT", coords.PlayerText, "BOTTOMLEFT", 0, -5)
+		coords.MouseText:SetText("Mouse:   0, 0")
+		local int = 0
+
+		WorldMapFrame:HookScript("OnUpdate", function(self, elapsed)
+			if InCombatLockdown() then
+				WorldMapFrameSizeDownButton:Disable()
+				WorldMapFrameSizeUpButton:Disable()
+			else
+				WorldMapFrameSizeDownButton:Enable()
+				WorldMapFrameSizeUpButton:Enable()			
+			end
+			
+			if WORLDMAP_SETTINGS.size == WORLDMAP_FULLMAP_SIZE then
+				WorldMapFrameSizeUpButton:Hide()
+				WorldMapFrameSizeDownButton:Show()
+			elseif WORLDMAP_SETTINGS.size == WORLDMAP_WINDOWED_SIZE then
+				WorldMapFrameSizeUpButton:Show()
+				WorldMapFrameSizeDownButton:Hide()
+			elseif WORLDMAP_SETTINGS.size == WORLDMAP_QUESTLIST_SIZE then
+				WorldMapFrameSizeUpButton:Hide()
+				WorldMapFrameSizeDownButton:Show()
+			end		
+
+			int = int + 1
+			
+			if int >= 3 then
+				local inInstance, _ = IsInInstance()
+				local x,y = GetPlayerMapPosition("player")
+					x = math.floor(100 * x)
+					y = math.floor(100 * y)
+				if x ~= 0 and y ~= 0 then
+					coords.PlayerText:SetText(PLAYER..":   "..x..", "..y)
+				else
+					coords.PlayerText:SetText(" ")
+				end
+				
+				local scale = WorldMapDetailFrame:GetEffectiveScale()
+				local width = WorldMapDetailFrame:GetWidth()
+				local height = WorldMapDetailFrame:GetHeight()
+				local centerX, centerY = WorldMapDetailFrame:GetCenter()
+				local x, y = GetCursorPosition()
+				local adjustedX = (x / scale - (centerX - (width/2))) / width
+				local adjustedY = (centerY + (height/2) - y / scale) / height	
+
+				if (adjustedX >= 0  and adjustedY >= 0 and adjustedX <= 1 and adjustedY <= 1) then
+					adjustedX = math.floor(100 * adjustedX)
+					adjustedY = math.floor(100 * adjustedY)
+					coords.MouseText:SetText(MOUSE_LABEL..":   "..adjustedX..", "..adjustedY)
+				else
+					coords.MouseText:SetText(" ")
+				end				
+				int = 0
+			end				
+		end)
 	end
 
-	if AuroraConfig.bags == true and not(IsAddOnLoaded("Baggins") or IsAddOnLoaded("Stuffing") or IsAddOnLoaded("Combuctor") or IsAddOnLoaded("cargBags") or IsAddOnLoaded("famBags") or IsAddOnLoaded("ArkInventory") or IsAddOnLoaded("Bagnon")) then
+	if AuroraConfig.bags == true and not(IsAddOnLoaded("Baggins") or IsAddOnLoaded("Stuffing") or IsAddOnLoaded("Combuctor") or IsAddOnLoaded("cargBags") or IsAddOnLoaded("famBags") or IsAddOnLoaded("ArkInventory") or IsAddOnLoaded("Bagnon") or IsAddOnLoaded("bbag")) then
 		BackpackTokenFrame:GetRegions():Hide()
 
 		for i = 1, 12 do
